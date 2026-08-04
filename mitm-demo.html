@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MITM Demo — Educational Simulation</title>
+<style>
+  :root{
+    --navy:#16233A; --navy-2:#1F344F; --gold:#C9A24B; --gold-dim:#8C702F;
+    --paper:#F6F3EC; --ink:#1B1B18; --muted:#6B6A62;
+    --term-bg:#0B0F0C; --term-line:#173023; --term-text:#5FE39A; --term-dim:#2E7A54;
+    --danger:#B4432E; --safe:#2E7D4F; --safe-dim:#1E4E32;
+  }
+  *{box-sizing:border-box;}
+  html, body{ height:100%; }
+  body{
+    margin:0; min-height:100vh; display:flex; flex-direction:column;
+    font-family:'Georgia','Times New Roman',serif; background:var(--paper); color:var(--ink);
+  }
+  .banner{
+    flex:none; background:var(--danger); color:#FBEAE5; text-align:center; padding:10px 16px;
+    font-family:Arial, Helvetica, sans-serif; font-size:13px; letter-spacing:.03em;
+    transition:background .3s ease;
+  }
+  .banner.secure{ background:var(--safe); color:#EAFBF1; }
+  .banner strong{font-weight:bold;}
+  .stage{
+    flex:1; display:grid; grid-template-columns:1fr 1fr; min-height:640px;
+  }
+  @media (max-width:860px){ .stage{grid-template-columns:1fr;} }
+
+  /* LEFT: fictional university portal */
+  .portal{
+    background:var(--navy); color:#EDEBE3; padding:48px 44px; position:relative;
+    display:flex; flex-direction:column; transition:background .3s ease;
+  }
+  .portal.secure{ background:var(--navy-2); }
+  .portal::after{
+    content:""; position:absolute; left:0; right:0; bottom:0; height:6px; background:var(--gold);
+  }
+  .portal.secure::after{ background:var(--safe); }
+  .crest{
+    width:56px; height:56px; border:2px solid var(--gold); border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-family:Arial, sans-serif;
+    font-weight:bold; color:var(--gold); font-size:20px; margin-bottom:18px;
+    transition:border-color .3s ease, color .3s ease;
+  }
+  .portal.secure .crest{ border-color:var(--safe); color:#79D8A0; }
+  .portal h1{ font-size:26px; margin:0 0 2px; font-weight:normal; letter-spacing:.02em;}
+  .portal .tag{ font-family:Arial, sans-serif; font-size:12px; color:var(--gold); letter-spacing:.14em; text-transform:uppercase; margin-bottom:36px;}
+  .portal.secure .tag{ color:#79D8A0; }
+  .wifi-note{
+    font-family:Arial, sans-serif; font-size:12px; color:#B9C2CE; background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.14); border-radius:4px; padding:8px 12px; margin-bottom:14px;
+    transition:background .3s ease, border-color .3s ease;
+  }
+  .wifi-note.secure{ background:rgba(121,216,160,.08); border-color:rgba(121,216,160,.3); }
+  .net-toggle{
+    align-self:flex-start; margin-bottom:24px; padding:9px 14px; background:transparent;
+    border:1px solid var(--gold); color:var(--gold); font-family:Arial, sans-serif; font-size:12px;
+    font-weight:bold; letter-spacing:.03em; border-radius:3px; cursor:pointer; transition:all .2s ease;
+  }
+  .net-toggle:hover{ background:rgba(201,162,75,.12); }
+  .net-toggle.secure{ border-color:var(--safe); color:#79D8A0; }
+  .net-toggle.secure:hover{ background:rgba(121,216,160,.12); }
+  .field{ margin-bottom:18px; }
+  .field label{ display:block; font-family:Arial, sans-serif; font-size:12px; color:#B9C2CE; margin-bottom:6px; letter-spacing:.03em;}
+  .field input{
+    width:100%; padding:11px 12px; border-radius:3px; border:1px solid #3B4E68; background:#0F1B2C;
+    color:#EDEBE3; font-family:Arial, sans-serif; font-size:14px;
+  }
+  .field input:focus{ outline:none; border-color:var(--gold); }
+  .portal.secure .field input:focus{ border-color:#79D8A0; }
+  .signin{
+    margin-top:8px; padding:12px; width:100%; background:var(--gold); color:#1B1408; border:none;
+    border-radius:3px; font-family:Arial, sans-serif; font-weight:bold; font-size:14px; letter-spacing:.03em;
+    cursor:pointer; transition:background .3s ease;
+  }
+  .signin:hover{ background:#D8B45E; }
+  .portal.secure .signin{ background:#79D8A0; color:#0B2417; }
+  .portal.secure .signin:hover{ background:#93E4B4; }
+  .portal-foot{ margin-top:auto; padding-top:28px; font-family:Arial, sans-serif; font-size:11px; color:#7C8AA0;}
+
+  /* RIGHT: attacker / network capture view */
+  .capture{
+    background:var(--term-bg); color:var(--term-text); padding:28px 30px; display:flex; flex-direction:column;
+  }
+  .capture-head{
+    font-family:'Courier New', monospace; font-size:12px; color:var(--term-dim); margin-bottom:16px;
+    display:flex; justify-content:space-between; border-bottom:1px dashed var(--term-line); padding-bottom:12px;
+  }
+  .capture-title{ font-family:'Courier New', monospace; font-size:14px; color:var(--term-text); margin:0 0 4px;}
+  .capture-sub{ font-family:Arial, sans-serif; font-size:12px; color:#7FA48E; margin:0 0 20px;}
+  #log{
+    flex:1; font-family:'Courier New', monospace; font-size:13px; line-height:1.65; overflow-y:auto;
+    max-height:420px;
+  }
+  #log .row{ margin-bottom:10px; opacity:0; animation:fade .4s forwards; }
+  @keyframes fade{ to{opacity:1;} }
+  #log .ts{ color:var(--term-dim); }
+  #log .flag{ color:#E3B25F; }
+  #log .cap{ color:#F0857A; font-weight:bold; }
+  #log .safe{ color:#5FE39A; }
+  #log .safe-flag{ color:#79D8A0; }
+  .empty{ color:var(--term-dim); font-family:'Courier New', monospace; font-size:13px;}
+  .capture-explain{
+    margin-top:18px; padding-top:14px; border-top:1px dashed var(--term-line);
+    font-family:Arial, sans-serif; font-size:12px; color:#7FA48E; line-height:1.6;
+  }
+</style>
+</head>
+<body>
+
+<div class="banner" id="banner"><strong>Educational simulation</strong> — no real network, server, or credentials are involved. Nothing here is transmitted anywhere.</div>
+
+<div class="stage">
+
+  <div class="portal" id="portal">
+    <div class="crest">MU</div>
+    <h1>Meridian University</h1>
+    <div class="tag">Student portal</div>
+
+    <div class="wifi-note" id="wifiNote">Connected via: <strong>Campus-Guest-WiFi</strong> (unsecured network)</div>
+
+    <button type="button" class="net-toggle" id="netToggle">Switch to secure network (WPA2 + HTTPS)</button>
+
+    <div class="field">
+      <label for="sid">Student number</label>
+      <input type="text" id="sid" placeholder="u00000000" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="pw">Password</label>
+      <input type="password" id="pw" placeholder="••••••••" autocomplete="off">
+    </div>
+    <button class="signin" id="signin">Sign in</button>
+
+    <div class="portal-foot">This is a fictional institution created for a classroom cybersecurity demo. It is not affiliated with any real university.</div>
+  </div>
+
+  <div class="capture">
+    <div class="capture-head"><span id="captureLabel">tcpdump — campus-guest-wifi</span><span id="clock">00:00:00</span></div>
+    <p class="capture-title" id="captureTitle"> ATTACKER VIEW DURING A MIDDLE-MAN-ATTACK</p>
+    <p class="capture-sub" id="captureSub">Simulated packet capture on an unsecured (HTTP, no encryption) connection</p>
+    <div id="log"><div class="empty">Waiting for sign-in attempt on the left…</div></div>
+    <div class="capture-explain" id="captureExplain">On an unencrypted connection, this is roughly what a person running a packet sniffer on the same network could read in plain text — no password needed on their end, no alert shown to you. The fix is simple: check for HTTPS, and avoid entering credentials on unsecured Wi-Fi.</div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  var log = document.getElementById('log');
+  var clock = document.getElementById('clock');
+  var signin = document.getElementById('signin');
+  var netToggle = document.getElementById('netToggle');
+  var banner = document.getElementById('banner');
+  var portal = document.getElementById('portal');
+  var wifiNote = document.getElementById('wifiNote');
+  var captureLabel = document.getElementById('captureLabel');
+  var captureTitle = document.getElementById('captureTitle');
+  var captureSub = document.getElementById('captureSub');
+  var captureExplain = document.getElementById('captureExplain');
+  var seconds = 0;
+  var cleared = false;
+  var secure = false;
+
+  setInterval(function(){
+    seconds++;
+    var h = String(Math.floor(seconds/3600)).padStart(2,'0');
+    var m = String(Math.floor((seconds%3600)/60)).padStart(2,'0');
+    var s = String(seconds%60).padStart(2,'0');
+    clock.textContent = h+':'+m+':'+s;
+  }, 1000);
+
+  function addLine(html){
+    if(!cleared){ log.innerHTML=''; cleared = true; }
+    var row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = html;
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function ts(){
+    var d = new Date();
+    return d.toTimeString().split(' ')[0] + '.' + String(d.getMilliseconds()).padStart(3,'0');
+  }
+
+  function pseudoCipher(seedStr){
+    // Deterministic-looking scramble to represent TLS-encrypted bytes. Not real crypto — purely illustrative.
+    var hex = '';
+    for(var i=0;i<Math.max(48, seedStr.length*2); i++){
+      var c = seedStr.charCodeAt(i % seedStr.length) || 0;
+      var v = (c * 2654435761 + i * 97) % 256;
+      hex += v.toString(16).padStart(2,'0');
+    }
+    return hex.slice(0,64);
+  }
+
+  function updateModeUI(){
+    if(secure){
+      banner.classList.add('secure');
+      banner.innerHTML = '<strong>Educational simulation</strong> — secure network mode active. Still no real network, server, or credentials are involved.';
+      portal.classList.add('secure');
+      wifiNote.classList.add('secure');
+      wifiNote.innerHTML = 'Connected via: <strong>Campus-Secure-WiFi</strong> (WPA2, HTTPS/TLS)';
+      netToggle.classList.add('secure');
+      netToggle.textContent = 'Switch to unsecure network (open WiFi + HTTP)';
+      captureLabel.textContent = 'tcpdump — campus-secure-wifi';
+      captureTitle.textContent = 'ATTACKER VIEW DURING A MIDDLE-MAN-ATTACK';
+      captureSub.textContent = 'Simulated packet capture on an encrypted (HTTPS/TLS) connection';
+      captureExplain.textContent = 'On an encrypted connection, anyone sniffing the same network only sees scrambled ciphertext and the destination host — never the actual student number or password. The login form and network are otherwise identical; encryption is the only difference.';
+    } else {
+      banner.classList.remove('secure');
+      banner.innerHTML = '<strong>Educational simulation</strong> — no real network, server, or credentials are involved. Nothing here is transmitted anywhere.';
+      portal.classList.remove('secure');
+      wifiNote.classList.remove('secure');
+      wifiNote.innerHTML = 'Connected via: <strong>Campus-Guest-WiFi</strong> (unsecured network)';
+      netToggle.classList.remove('secure');
+      netToggle.textContent = 'Switch to secure network (WPA2 + HTTPS)';
+      captureLabel.textContent = 'tcpdump — campus-guest-wifi';
+      captureTitle.textContent = 'ATTACKER VIEW DURING A MIDDLE-MAN-ATTACK';
+      captureSub.textContent = 'Simulated packet capture on an unsecured (HTTP, no encryption) connection';
+      captureExplain.textContent = 'On an unencrypted connection, this is roughly what a person running a packet sniffer on the same network could read in plain text — no password needed on their end, no alert shown to you. The fix is simple: check for HTTPS, and avoid entering credentials on unsecured Wi-Fi.';
+    }
+    cleared = false;
+    log.innerHTML = '<div class="empty">Waiting for sign-in attempt on the left…</div>';
+  }
+
+  netToggle.addEventListener('click', function(){
+    secure = !secure;
+    updateModeUI();
+  });
+
+  signin.addEventListener('click', function(){
+    var sid = document.getElementById('sid').value || '(empty)';
+    var pw = document.getElementById('pw').value || '(empty)';
+
+    if(secure){
+      addLine('<span class="ts">['+ts()+']</span> <span class="safe-flag">TLS 1.3</span> ClientHello -&gt; portal.meridian-u.example:443');
+      setTimeout(function(){
+        addLine('<span class="ts">['+ts()+']</span> ServerHello, Certificate, Finished (handshake OK)');
+      }, 250);
+      setTimeout(function(){
+        addLine('<span class="ts">['+ts()+']</span> <span class="safe">Application Data</span> (encrypted, '+ (24 + sid.length + pw.length) +' bytes)');
+      }, 500);
+      setTimeout(function(){
+        addLine('<span class="ts">['+ts()+']</span> <span class="safe">'+pseudoCipher(sid+pw)+'</span>');
+      }, 850);
+      setTimeout(function(){
+        addLine('<span class="ts">['+ts()+']</span> <span class="safe-flag">--&gt; contents unreadable without the private key. student_id and password never appear in plain text.</span>');
+      }, 1150);
+    } else {
+      addLine('<span class="ts">['+ts()+']</span> <span class="flag">GET</span> /portal/login.php <span class="flag">HTTP/1.1</span>');
+      setTimeout(function(){
+        addLine('<span class="ts">['+ts()+']</span> Host: portal.meridian-u.example');
+      }, 250);
+      setTimeout(function(){
+        addLine('<span class="ts">['+ts()+']</span> Content-Type: application/x-www-form-urlencoded');
+      }, 500);
+      setTimeout(function(){
+        addLine('<span class="ts">['+ts()+']</span> <span class="cap">student_id='+sid+'&password='+pw+'</span>');
+      }, 850);
+      setTimeout(function(){
+        addLine('<span class="ts">['+ts()+']</span> <span class="flag">--&gt; credentials captured in plain text</span>');
+      }, 1150);
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
